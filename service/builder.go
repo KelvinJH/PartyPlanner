@@ -25,7 +25,7 @@ type ChatMessageData struct {
 }
 
 func CreateCalendar() (*template.Template, CalendarData) {
-	calendar, err := template.ParseFiles("E:\\golangs\\friendtrips\\service\\html\\calendar.html")
+	calendar, err := template.ParseFiles("./service/html/calendar.html")
 	today := time.Now()
 	days := getDaysInMonth(today)
 
@@ -43,7 +43,7 @@ func CreateCalendar() (*template.Template, CalendarData) {
 }
 
 func CreateAuthPage() *template.Template {
-	waitingRoom, err := template.ParseFiles("E:\\golangs\\friendtrips\\service\\html\\waitingroom.html")
+	waitingRoom, err := template.ParseFiles("./service/html/waitingroom.html")
 
 	if err != nil {
 		fmt.Println("Error while parsing the waiting room template file: ", err)
@@ -53,7 +53,7 @@ func CreateAuthPage() *template.Template {
 }
 
 func CreateChatMessages(clientName, content, timestamp string) []byte {
-	chatMessage, err := template.ParseFiles("E:\\golangs\\friendtrips\\service\\html\\message.html")
+	chatMessage, err := template.ParseFiles("./service/html/message.html")
 	if err != nil {
 		fmt.Printf("Error while rendering chat message: %s \n", err)
 	}
