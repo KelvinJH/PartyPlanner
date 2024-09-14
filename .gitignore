@@ -1,6 +1,3 @@
-/tmp
-
-
 *.exe
 *.exe~
 *.dll
@@ -14,6 +11,8 @@
 
 go.work
 go.work.sum
-/.air
-todo.txt
 .end
+/.air
+/tmp
+todo.txt
+secret.json

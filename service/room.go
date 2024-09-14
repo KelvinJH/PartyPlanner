@@ -6,23 +6,23 @@ import (
 	"partyplanner/db"
 )
 
-func ValidateRoom(name, key string) (string, error) {
+func ValidateRoom(name, key string) (bool, error) {
 	fmt.Println("Inside the validate room key endpoint ---- Returning false for now")
 	dbInstance := db.GetDbInstance()
-	
+
 	room := dbInstance.GetRoom(name, string(getHashedKey(key)))
 	if room.Id == 0 {
-		return "", fmt.Errorf("validation error")
+		return false, fmt.Errorf("validation error")
 	}
-	return room.Name, nil
+	return true, nil
 }
 
-func CreateRoom(name, key string, capacity int16) {
+func CreateRoom(name, key string, capacity int16) int {
 	dbInstance := db.GetDbInstance()
-	
+
 	hashedKey := getHashedKey(key)
 	createdRoom := dbInstance.CreateRoom(name, string(hashedKey), capacity)
-	fmt.Printf("Created room with id %d \n", createdRoom)
+	return createdRoom
 }
 
 func getHashedKey(key string) []byte {
