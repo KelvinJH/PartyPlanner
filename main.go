@@ -2,17 +2,17 @@ package main
 
 import (
 	"fmt"
-	"partyplanner/db"
-	router "partyplanner/router"
-	service "partyplanner/service"
-	ws "partyplanner/ws"
 	"log"
 	"net/http"
+	"partyplanner/db"
+	router "partyplanner/router"
+	ws "partyplanner/ws"
 )
 
 func main() {
 	fmt.Println("This is a Calendar App on the web")
 	setupHandlers()
+	router.InitRouter()
 	db.InitDatabase()
 	database := db.GetDbInstance()
 	defer database.CloseConnect()
@@ -21,25 +21,20 @@ func main() {
 }
 
 func setupHandlers() {
-	authPage := service.CreateAuthPage()
 
 	manager := ws.NewManager()
 	go manager.Run()
 
-	// Pages 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		authPage.Execute(w, nil)
-	})
-	http.HandleFunc("/calendar", func(w http.ResponseWriter, r *http.Request) {
-		template, templateData := service.CreateCalendar()
-		data := templateData
-		template.Execute(w, data)
-	})
+	// Pages
+	http.HandleFunc("/", router.Authorized(router.Home))
+	http.HandleFunc("/calendar", router.Authorized(router.Calendar))
 
-	//Endpoints
-	http.HandleFunc("/v1/event", router.SaveEvent)
+	// Endpoints
+	http.HandleFunc("/v1/event", router.Authorized(router.SaveEvent))
 	http.HandleFunc("/v1/authorize", router.AuthorizeUser)
 	http.HandleFunc("/v1/room", router.CreateRoom)
+	http.HandleFunc("/v1/healthcheck", router.Healthcheck)
+
 	// Websocket
-	http.HandleFunc("/wschat", manager.ServeWebsocket)
+	http.HandleFunc("/wschat", router.Authorized(manager.ServeWebsocket))
 }
