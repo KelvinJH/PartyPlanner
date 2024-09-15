@@ -10,10 +10,16 @@ const (
 	MAX_ROOMS = 15
 )
 
-type Client struct {
+type ChatClient struct {
 	connection *websocket.Conn
-	server     *Manager
+	server     *MessageManager
 	egress     chan []byte
+}
+
+type EventClient struct {
+	connection *websocket.Conn
+	server     *EventManager
+	eventQueue chan []byte
 }
 
 type Message struct {
@@ -27,15 +33,23 @@ type WSMessage struct {
 	Message string      `json:"message"`
 }
 
-func NewClient(connection *websocket.Conn, server *Manager) *Client {
-	return &Client{
+func NewChatClient(connection *websocket.Conn, server *MessageManager) *ChatClient {
+	return &ChatClient{
 		connection: connection,
 		server:     server,
 		egress:     make(chan []byte),
 	}
 }
 
-func (client *Client) readMessages() {
+func NewEventClient(connection *websocket.Conn, server *EventManager) *EventClient {
+	return &EventClient{
+		connection: connection,
+		server:     server,
+		eventQueue: make(chan []byte),
+	}
+}
+
+func (client *ChatClient) readMessages() {
 	defer func() {
 		// Clean up
 		client.connection.Close()
@@ -61,7 +75,7 @@ func (client *Client) readMessages() {
 	}
 }
 
-func (client *Client) writeMessages() {
+func (client *ChatClient) writeMessages() {
 	defer func() {
 		client.server.removeWebsocket(client)
 	}()
@@ -84,21 +98,23 @@ func (client *Client) writeMessages() {
 	}
 }
 
-func createTestMessages() []Message {
-	messages := make([]Message, 3)
+func (client *EventClient) writeMessages() {
+	defer func() {
+		client.server.removeWebsocket(client)
+	}()
 
-	for x := 0; x < len(messages); x++ {
-		if x%2 == 0 {
-			messages[x] = Message{
-				content:   "This is a text message",
-				timestamp: "9/6/2024",
+	for {
+		select {
+		case message, ok := <-client.eventQueue:
+			if !ok {
+				if err := client.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
+					log.Println("Connection closed: ", err)
+				}
+				return
 			}
-		} else {
-			messages[x] = Message{
-				content:   "This is a text reply",
-				timestamp: "9/6/2024",
+			if err := client.connection.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Println("failed to send event message: ", err)
 			}
 		}
 	}
-	return messages
 }

@@ -8,23 +8,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"partyplanner/bus"
 	"partyplanner/service"
 	"strconv"
 )
 
-var store *sessions.CookieStore
-var session Secret
-
-func InitRouter() {
-	secretJson, err := os.Open("./secret.json")
-	if err != nil {
-		fmt.Println("Failed to get secret key from json")
-	}
-	defer secretJson.Close()
-
-	secretBytes, _ := io.ReadAll(secretJson)
-	json.Unmarshal(secretBytes, &session)
-	store = sessions.NewCookieStore([]byte(session.Key))
+type Router struct {
+	store    *sessions.CookieStore
+	eventBus *bus.EventBus
 }
 
 type Event struct {
@@ -35,6 +26,25 @@ type Event struct {
 
 type Secret struct {
 	Key string `json:"secret_key"`
+}
+
+var router Router
+
+func NewRouter(bus *bus.EventBus) *Router {
+	secretJson, err := os.Open("./secret.json")
+	if err != nil {
+		fmt.Println("Failed to get secret key from json")
+	}
+	defer secretJson.Close()
+	var session Secret
+	secretBytes, _ := io.ReadAll(secretJson)
+	json.Unmarshal(secretBytes, &session)
+
+	router = Router{
+		store:    sessions.NewCookieStore([]byte(session.Key)),
+		eventBus: bus,
+	}
+	return &router
 }
 
 func SaveEvent(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +64,13 @@ func SaveEvent(w http.ResponseWriter, r *http.Request) {
 		Date:        r.FormValue("event-date"),
 		Description: r.FormValue("event-description"),
 	}
-
+	eventBytes, err := json.Marshal(event)
+	if err != nil {
+		fmt.Println("Error converting event to bytes: ", err)
+		return
+	}
+	router.eventBus.Publish(eventBytes)
+	// Save to db after testing
 	log.Println(event, " Has been saved")
 }
 
@@ -78,7 +94,7 @@ func CreateRoom(w http.ResponseWriter, r *http.Request) {
 	roomId := service.CreateRoom(r.FormValue("room-name"), r.FormValue("room-key"), int16(cap))
 	if roomId != 0 {
 		fmt.Printf("Created room %d successfully", roomId)
-		session, _ := store.Get(r, "session.id")
+		session, _ := router.store.Get(r, "session.id")
 		session.Values["room-name"] = r.FormValue("room-name")
 		http.Redirect(w, r, "/calendar", http.StatusSeeOther)
 	}
@@ -107,7 +123,7 @@ func AuthorizeUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if exists {
 		fmt.Println("the room exists")
-		session, _ := store.Get(r, "session.id")
+		session, _ := router.store.Get(r, "session.id")
 		session.Values["authenticated"] = true
 		session.Values["room-name"] = roomName
 		session.Save(r, w)
@@ -128,7 +144,7 @@ func Healthcheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func isAuthenticated(r *http.Request) bool {
-	session, _ := store.Get(r, "session.id")
+	session, _ := router.store.Get(r, "session.id")
 	authenticated := session.Values["authenticated"]
 	fmt.Println(session.Values["room-name"])
 	if authenticated != nil && authenticated != false {
@@ -139,7 +155,7 @@ func isAuthenticated(r *http.Request) bool {
 
 func Calendar(w http.ResponseWriter, r *http.Request) {
 	template, templateData := service.CreateCalendar()
-	session, _ := store.Get(r, "session.id")
+	session, _ := router.store.Get(r, "session.id")
 	calendarName, ok := session.Values["room-name"].(string)
 	if ok {
 		templateData.CalendarName = calendarName
@@ -156,7 +172,7 @@ func Home(w http.ResponseWriter, r *http.Request) {
 
 func Authorized(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, _ := store.Get(r, "session.id")
+		session, _ := router.store.Get(r, "session.id")
 		authenticated := session.Values["authenticated"]
 		if authenticated != nil && authenticated != false {
 			next.ServeHTTP(w, r)
