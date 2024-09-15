@@ -2,10 +2,11 @@ package ws
 
 import (
 	"fmt"
-	"net/http"
-	"sync"
-	"partyplanner/service"
 	"github.com/gorilla/websocket"
+	"net/http"
+	"partyplanner/bus"
+	"partyplanner/service"
+	"sync"
 )
 
 var (
@@ -15,21 +16,33 @@ var (
 	}
 )
 
-type Manager struct {
-	clients          map[*Client]bool
-	messages         []*Message
+type MessageManager struct {
+	clients          map[*ChatClient]bool
 	messageBroadcast chan *Message
 	sync.RWMutex
 }
 
-func NewManager() *Manager {
-	return &Manager{
-		clients:          make(map[*Client]bool),
+type EventManager struct {
+	clients  map[*EventClient]bool
+	eventBus *bus.EventBus
+	sync.RWMutex
+}
+
+func NewMessageManager() *MessageManager {
+	return &MessageManager{
+		clients:          make(map[*ChatClient]bool),
 		messageBroadcast: make(chan *Message),
 	}
 }
 
-func (manager *Manager) addClient(client *Client) {
+func NewEventManager(bus *bus.EventBus) *EventManager {
+	return &EventManager{
+		clients:  make(map[*EventClient]bool),
+		eventBus: bus,
+	}
+}
+
+func (manager *MessageManager) addClient(client *ChatClient) {
 
 	fmt.Printf("Connection from client : %s\n", client.connection.RemoteAddr())
 	// Lock the client map
@@ -40,7 +53,7 @@ func (manager *Manager) addClient(client *Client) {
 	manager.clients[client] = true
 }
 
-func (manager *Manager) removeWebsocket(client *Client) {
+func (manager *MessageManager) removeWebsocket(client *ChatClient) {
 	fmt.Println("Disconnecting client: ", client.connection.RemoteAddr())
 	manager.Lock()
 	defer manager.Unlock()
@@ -51,29 +64,71 @@ func (manager *Manager) removeWebsocket(client *Client) {
 	}
 }
 
-func (manager *Manager) ServeWebsocket(w http.ResponseWriter, r *http.Request) {
+func (manager *EventManager) removeWebsocket(client *EventClient) {
+	fmt.Println("Disconnecting client: ", client.connection.RemoteAddr())
+	manager.Lock()
+	defer manager.Unlock()
+
+	if _, ok := manager.clients[client]; ok {
+		client.connection.Close()
+		delete(manager.clients, client)
+	}
+}
+
+func (manager *MessageManager) ServeChat(w http.ResponseWriter, r *http.Request) {
 	connection, err := upgrader.Upgrade(w, r, nil)
 
 	if err != nil {
 		fmt.Println("Error while connecting: ", err)
 	}
-	client := NewClient(connection, manager)
+	client := NewChatClient(connection, manager)
 	manager.addClient(client)
 
 	go client.readMessages()
 	go client.writeMessages()
 }
 
-func (manager *Manager) Run() {
+func (manager *EventManager) ServeEvents(w http.ResponseWriter, r *http.Request) {
+	connection, err := upgrader.Upgrade(w, r, nil)
+
+	if err != nil {
+		fmt.Println("Error while connecting: ", err)
+	}
+	client := NewEventClient(connection, manager)
+	manager.Lock()
+	defer manager.Unlock()
+	fmt.Printf("Connection from event client : %s\n", client.connection.RemoteAddr())
+
+	manager.clients[client] = true
+
+	go client.writeMessages()
+}
+
+func (manager *MessageManager) Run() {
 	for {
 		select {
 		case message := <-manager.messageBroadcast:
-			manager.messages = append(manager.messages, message)
 			for client := range manager.clients {
 				select {
 				case client.egress <- service.CreateChatMessages("Test User", message.content, message.timestamp):
 				default:
 					close(client.egress)
+					delete(manager.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (manager *EventManager) ListenForEvents() {
+	for {
+		select {
+		case event := <-manager.eventBus.Events:
+			for client := range manager.clients {
+				select {
+				case client.eventQueue <- event:
+				default:
+					close(client.eventQueue)
 					delete(manager.clients, client)
 				}
 			}

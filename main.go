@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"partyplanner/bus"
 	"partyplanner/db"
-	router "partyplanner/router"
-	ws "partyplanner/ws"
+	"partyplanner/router"
+	"partyplanner/ws"
 )
 
 func main() {
 	fmt.Println("This is a Calendar App on the web")
 	setupHandlers()
-	router.InitRouter()
 	db.InitDatabase()
 	database := db.GetDbInstance()
 	defer database.CloseConnect()
@@ -21,10 +21,13 @@ func main() {
 }
 
 func setupHandlers() {
+	eventBus := bus.NewEventBus()
+	chatManager := ws.NewMessageManager()
+	eventManager := ws.NewEventManager(eventBus)
+	router.NewRouter(eventBus)
 
-	manager := ws.NewManager()
-	go manager.Run()
-
+	go chatManager.Run()
+	go eventManager.ListenForEvents()
 	// Pages
 	http.HandleFunc("/", router.Authorized(router.Home))
 	http.HandleFunc("/calendar", router.Authorized(router.Calendar))
@@ -36,5 +39,6 @@ func setupHandlers() {
 	http.HandleFunc("/v1/healthcheck", router.Healthcheck)
 
 	// Websocket
-	http.HandleFunc("/wschat", router.Authorized(manager.ServeWebsocket))
+	http.HandleFunc("/wschat", router.Authorized(chatManager.ServeChat))
+	http.HandleFunc("/wsevent", router.Authorized(eventManager.ServeEvents))
 }
