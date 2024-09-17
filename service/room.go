@@ -2,17 +2,15 @@ package service
 
 import (
 	sha "crypto/sha256"
-	"fmt"
 	"partyplanner/db"
 )
 
 func ValidateRoom(name, key string) (bool, error) {
-	fmt.Println("Inside the validate room key endpoint ---- Returning false for now")
 	dbInstance := db.GetDbInstance()
 
-	room := dbInstance.GetRoom(name, string(getHashedKey(key)))
+	room, err:= dbInstance.GetRoom(name, string(getHashedKey(key)))
 	if room.Id == 0 {
-		return false, fmt.Errorf("validation error")
+		return false, err
 	}
 	return true, nil
 }

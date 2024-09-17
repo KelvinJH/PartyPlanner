@@ -20,7 +20,8 @@ type Router struct {
 
 type Event struct {
 	Name        string `json:"event_name"`
-	Date        string `json:"event_date"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
 	Description string `json:"event_description"`
 }
 
@@ -59,19 +60,28 @@ func SaveEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event := Event{
-		Name:        r.FormValue("event-name"),
-		Date:        r.FormValue("event-date"),
-		Description: r.FormValue("event-description"),
-	}
+	event := []string{r.FormValue("event-name"), r.FormValue("start-date"), r.FormValue("end-date"), r.FormValue("event-description")}
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
 		fmt.Println("Error converting event to bytes: ", err)
 		return
 	}
 	router.eventBus.Publish(eventBytes)
+
+	session, _ := router.store.Get(r, "session.id")
+	roomId, ok := session.Values["room-id"].(int)
+	if !ok {
+		http.Error(w, "Unable to find room id from session", http.StatusBadRequest)
+	}
+
 	// Save to db after testing
-	log.Println(event, " Has been saved")
+	eventId, err := service.SaveEvent(roomId, event[0], event[1], event[2], event[3])
+	if err != nil {
+		http.Error(w, "Unable to save event", http.StatusInternalServerError)
+		return
+	}
+
+	log.Println(eventId, " Has been saved")
 }
 
 func CreateRoom(w http.ResponseWriter, r *http.Request) {
@@ -95,15 +105,14 @@ func CreateRoom(w http.ResponseWriter, r *http.Request) {
 	if roomId != 0 {
 		fmt.Printf("Created room %d successfully", roomId)
 		session, _ := router.store.Get(r, "session.id")
+		session.Values["authenticated"] = true
+		session.Values["room-id"] = roomId
 		session.Values["room-name"] = r.FormValue("room-name")
 		http.Redirect(w, r, "/calendar", http.StatusSeeOther)
 	}
-	return
 }
 
 func AuthorizeUser(w http.ResponseWriter, r *http.Request) {
-	log.Println("Inside authorization workflow")
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid Method", http.StatusMethodNotAllowed)
 		return
