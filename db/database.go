@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	host     = "localhost"
-	port     = 5432
-	user     = "root"
-	password = "secret"
-	dbname   = "gotripdb"
+	host       = "localhost"
+	port       = 5432
+	user       = "root"
+	password   = "secret"
+	dbname     = "gotripdb"
+	TimeFormat = "01/02/2006 03:04 MST"
 )
 
 type Room struct {
@@ -24,6 +25,17 @@ type Room struct {
 	CreatedDate time.Time
 	UpdatedDate time.Time
 	Key         string
+}
+
+type Event struct {
+	Id          int
+	RoomId      int
+	Name        string
+	StartDate   time.Time
+	EndDate     time.Time
+	Description string
+	CreatedDate time.Time
+	UpdatedDate time.Time
 }
 
 type Database struct {
@@ -73,13 +85,25 @@ func (db *Database) GetCalendar(calendarId int) {
 	fmt.Printf("Getting calendar %d from database\n", calendarId)
 }
 
+func (db *Database) SaveEvent(event Event) (int, error) {
+	query := `INSERT INTO events (room_id, event_name, event_description, start_date, end_date) 
+				VALUES ($1, $2, $3, $4, $5) RETURNING event_id`
+
+	var eventId int
+	err := db.driver.QueryRow(query, event.Id, event.Name, event.Description, event.StartDate, event.EndDate).Scan(&eventId)
+	if err != nil {
+		return 0, err
+	}
+
+	return eventId, nil
+}
+
 func (db *Database) CreateRoom(name, key string, cap int16) int {
 	fmt.Printf("Creating %s with a capacity of %d \n", name, cap)
 
-
-	// Check if room already exists 
-	existingRoom := db.GetRoom(name, key)
-	if existingRoom.Id != 0 {
+	// Check if room already exists
+	existingRoom, err := db.GetRoom(name, key)
+	if existingRoom.Id != 0 && err == nil {
 		fmt.Printf("There is an existing room (%d - %s) with this name and key \n", existingRoom.Id, name)
 		return existingRoom.Id
 	}
@@ -89,7 +113,7 @@ func (db *Database) CreateRoom(name, key string, cap int16) int {
 
 	var primaryKey int
 
-	err := db.driver.QueryRow(query, name, key, cap).Scan(&primaryKey)
+	err = db.driver.QueryRow(query, name, key, cap).Scan(&primaryKey)
 	if err != nil {
 		log.Fatalf("Error while creating a new room %v\n", err)
 	}
@@ -97,14 +121,14 @@ func (db *Database) CreateRoom(name, key string, cap int16) int {
 	return primaryKey
 }
 
-func (db *Database) GetRoom(name, key string) Room {
+func (db *Database) GetRoom(name, key string) (Room, error) {
 	query := `SELECT room_id, capacity, room_name FROM rooms WHERE room_name = $1 and room_key = $2`
 
 	var foundRoom Room
 
 	err := db.driver.QueryRow(query, name, key).Scan(&foundRoom.Id, &foundRoom.Capacity, &foundRoom.Name)
 	if err != nil {
-		log.Fatalf("Error while searching for room %s: %v\n", name, err)
+		return Room{}, err
 	}
-	return foundRoom
+	return foundRoom, nil
 }
