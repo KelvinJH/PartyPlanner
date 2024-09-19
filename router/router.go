@@ -144,7 +144,7 @@ func AuthorizeUser(w http.ResponseWriter, r *http.Request) {
 
 func Healthcheck(w http.ResponseWriter, r *http.Request) {
 	authenticated := isAuthenticated(r)
-	if authenticated == true {
+	if authenticated {
 		w.Write([]byte("Session is authorized"))
 		return
 	} else {

@@ -10,7 +10,6 @@ import (
 
 func SaveEvent(roomId int, name, start, end, description string) (int, error) {
 	dbInstance := db.GetDbInstance()
-	fmt.Printf("start : %s \nend: %s\n", start, end)
 	startDate, _ := time.Parse(db.TimeFormat, start)
 	endDate, _ := time.Parse(db.TimeFormat, end)
 	event := db.Event{

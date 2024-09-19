@@ -6,8 +6,8 @@
         integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
         crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
-    <title>Friendtrips</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
+    <title>PartyPlanner</title>
 </head>
 
 <body>
@@ -23,7 +23,12 @@
                 <div>
                     <span class="text-lg font-bold text-gray-800">{{.CalendarName}}</span>
                 </div>
-                <div class="border rounded-lg px-1" style="padding-top: 2px;">
+                <div class="border rounded-lg px-1 flex items-center justify-center">
+                    <button type="button" onclick="toggleEventPopup()"
+                        class="rounded-lg transition cursor-pointer hover:bg-gray-200 flex p-1 items-center">
+                        <p class="text-gray-900">Add Event</p>
+                    </button>
+                    <div class="border-r inline-flex h-6"></div>
                     <button type="button"
                         class="leading-none rounded-lg transition ease-in-out duration-100 inline-flex cursor-pointer hover:bg-gray-200 p-1 items-center">
                         <svg class="h-6 w-6 text-gray-500 inline-flex leading-none" fill="none" viewBox="0 0 24 24"
@@ -51,16 +56,17 @@
                     {{end}}
 
                 </div>
-                <div class="grid grid-cols-7 h-full w-full">
+                <div id="selectable-grid" class="grid grid-cols-7 h-full w-full">
                     {{range $index, $item := .Days}}
-                    <a onclick="toggleEventPopup()">
-                        <div
-                            class="items-start justify-start w-full h-full pl-2 pr-32 pt-2.5 pb-24 border border-gray-200 hover:bg-blue-100">
-                            {{ if (gt $item 0) }}
-                            <p id="day-{{$item}}" class="text-sm font-medium text-gray-800">{{$item}}</p>
-                            {{end}}
-                        </div>
-                    </a>
+
+                    <div id="day-grid"
+                        class="items-start justify-start w-full h-full pl-2 pr-32 pt-2.5 pb-24 border border-gray-200 hover:bg-blue-100">
+                        {{ if (gt $item 0) }}
+                        <p id="{{$.CurrentMonth}}-{{$item}}-{{$.Year}}" class="text-sm font-medium text-gray-800">
+                            {{$item}}</p>
+                        {{end}}
+                    </div>
+
                     {{end}}
                 </div>
             </div>
@@ -100,10 +106,18 @@
                                         placeholder="Event Name" required />
                                 </div>
                                 <div>
-                                    <label for="event-date"
-                                        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Event
+                                    <label for="start-date"
+                                        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Start
                                         Date</label>
-                                    <input type="date" name="event-date" id="event-date" placeholder="Event Date"
+                                    <input type="date" name="start-date" id="start-date" placeholder="Start Date"
+                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                        required />
+                                </div>
+                                <div>
+                                    <label for="end-date"
+                                        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">End
+                                        Date</label>
+                                    <input type="date" name="end-date" id="end-date" placeholder="End Date"
                                         class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
                                         required />
                                 </div>
@@ -171,9 +185,15 @@
         function toggleEventPopup() {
             if (document.getElementById("event-modal").style.display === "flex") {
                 document.getElementById("event-modal").style.display = "none";
-            } else {
-                document.getElementById("event-modal").style.display = "flex";
+                return;
             }
+
+            document.getElementById("event-modal").style.display = "flex";
+            const endDate = Math.max(...daysSelected);
+            const startDate = Math.min(...daysSelected);
+
+            document.getElementById("start-date").valueAsDate = new Date(`{{.CurrentMonth}} ${startDate} {{.Year}}`);
+            document.getElementById("end-date").valueAsDate = new Date(`{{.CurrentMonth}} ${endDate} {{.Year}}`);
         }
 
         function saveEvent() {
@@ -196,9 +216,24 @@
             console.log("Inside events socket message received");
 
         }
-
+        let daysSelected = [];
         window.onload = function () {
             document.getElementById("chatbox-form").onsubmit = sendMessage;
+            document.getElementById("selectable-grid").addEventListener('click', function (e) {
+                if (e.target && e.target.id.startsWith("day-grid")) {
+                    const day = e.target;
+                    const dayNum = parseInt(day.innerText);
+
+                    if (daysSelected.includes(dayNum)) {
+                        daysSelected = daysSelected.filter(d => d != dayNum);
+                        day.classList.remove("bg-blue-300");
+                    } else {
+                        daysSelected.push(dayNum);
+                        day.classList.add("bg-blue-300");
+                    }
+                }
+            });
+
         }
     </script>
 </body>

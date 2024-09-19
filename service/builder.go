@@ -14,6 +14,7 @@ type CalendarData struct {
 	CalendarName string
 	CurrentMonth string
 	Months       [12]string
+	Year         int
 	DayNames     [7]string
 	Days         []int
 }
@@ -35,6 +36,7 @@ func CreateCalendar() (*template.Template, CalendarData) {
 	calendarData := CalendarData{
 		CurrentMonth: today.Month().String(),
 		Months:       Months,
+		Year:         today.Year(),
 		DayNames:     Days,
 		Days:         days,
 	}
