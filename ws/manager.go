@@ -53,6 +53,15 @@ func (manager *MessageManager) addClient(client *ChatClient) {
 	manager.clients[client] = true
 }
 
+func (manager *EventManager) addClient(client *EventClient) {
+	fmt.Printf("Connection from event client : %s\n", client.connection.RemoteAddr())
+	manager.Lock()
+	defer manager.Unlock()
+
+	manager.eventBus.Ready <- true
+	manager.clients[client] = true
+}
+
 func (manager *MessageManager) removeWebsocket(client *ChatClient) {
 	fmt.Println("Disconnecting client: ", client.connection.RemoteAddr())
 	manager.Lock()
@@ -95,11 +104,7 @@ func (manager *EventManager) ServeEvents(w http.ResponseWriter, r *http.Request)
 		fmt.Println("Error while connecting: ", err)
 	}
 	client := NewEventClient(connection, manager)
-	manager.Lock()
-	defer manager.Unlock()
-	fmt.Printf("Connection from event client : %s\n", client.connection.RemoteAddr())
-
-	manager.clients[client] = true
+	manager.addClient(client)
 
 	go client.writeMessages()
 }
@@ -121,15 +126,19 @@ func (manager *MessageManager) Run() {
 }
 
 func (manager *EventManager) ListenForEvents() {
+	defer func() {
+		manager.eventBus.Close()
+	}()
+
 	for {
 		select {
 		case event := <-manager.eventBus.Events:
+			if len(event) == 0 {
+				continue
+			}
 			for client := range manager.clients {
 				select {
 				case client.eventQueue <- event:
-				default:
-					close(client.eventQueue)
-					delete(manager.clients, client)
 				}
 			}
 		}

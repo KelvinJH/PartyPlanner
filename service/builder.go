@@ -25,6 +25,11 @@ type ChatMessageData struct {
 	Timestamp  string
 }
 
+type EventRowData struct {
+	EventTime string
+	EventName string
+}
+
 func CreateCalendar() (*template.Template, CalendarData) {
 	calendar, err := template.ParseFiles("./service/html/calendar.html")
 	today := time.Now()
@@ -72,6 +77,26 @@ func CreateChatMessages(clientName, content, timestamp string) []byte {
 	}
 
 	return renderedMessage.Bytes()
+}
+
+func CreateEventRow(time, name string) []byte {
+	eventRow, err := template.ParseFiles("./service/html/eventrow.html")
+	if err != nil {
+		fmt.Printf("Error while rendering event row: %v\n", err)
+	}
+
+	data := EventRowData{
+		EventTime: time,
+		EventName: name,
+	}
+
+	var renderedRow bytes.Buffer
+	err = eventRow.Execute(&renderedRow, data)
+	if err != nil {
+		fmt.Printf("Error while parsing event row: %s \n", err)
+	}
+
+	return renderedRow.Bytes()
 }
 
 func getDaysInMonth(now time.Time) []int {

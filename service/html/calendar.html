@@ -59,11 +59,21 @@
                 <div id="selectable-grid" class="grid grid-cols-7 h-full w-full">
                     {{range $index, $item := .Days}}
 
-                    <div id="day-grid"
-                        class="items-start justify-start w-full h-full pl-2 pr-32 pt-2.5 pb-24 border border-gray-200 hover:bg-blue-100">
+                    <div id="day-grid" class="items-start justify-start w-full h-full pb-20 border border-gray-200">
                         {{ if (gt $item 0) }}
-                        <p id="{{$.CurrentMonth}}-{{$item}}-{{$.Year}}" class="text-sm font-medium text-gray-800">
+                        <p id="{{$.CurrentMonth}}-{{$item}}-{{$.Year}}" class="text-sm font-large text-gray-800">
                             {{$item}}</p>
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-gray-800 bg-gray-50">
+                                <tr id="event-header">
+                                    <th scope="col" class="px-3">Time</th>
+                                    <th scope="col" class="px-6">Event</th>
+                                </tr>
+                            </thead>
+                            <tbody id="event-table">
+
+                            </tbody>
+                        </table>
                         {{end}}
                     </div>
 
@@ -109,7 +119,8 @@
                                     <label for="start-date"
                                         class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Start
                                         Date</label>
-                                    <input type="date" name="start-date" id="start-date" placeholder="Start Date"
+                                    <input type="datetime-local" name="start-date" id="start-date"
+                                        placeholder="Start Date"
                                         class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
                                         required />
                                 </div>
@@ -117,7 +128,7 @@
                                     <label for="end-date"
                                         class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">End
                                         Date</label>
-                                    <input type="date" name="end-date" id="end-date" placeholder="End Date"
+                                    <input type="datetime-local" name="end-date" id="end-date" placeholder="End Date"
                                         class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
                                         required />
                                 </div>
@@ -173,7 +184,6 @@
 
     <script>
         function sendMessage() {
-            console.log("Inside send message");
             var message = document.getElementById("chatbox");
             if (message != null) {
                 chatConnection.send(message.value);
@@ -191,16 +201,14 @@
             document.getElementById("event-modal").style.display = "flex";
             const endDate = Math.max(...daysSelected);
             const startDate = Math.min(...daysSelected);
-
-            document.getElementById("start-date").valueAsDate = new Date(`{{.CurrentMonth}} ${startDate} {{.Year}}`);
-            document.getElementById("end-date").valueAsDate = new Date(`{{.CurrentMonth}} ${endDate} {{.Year}}`);
+            document.getElementById("start-date").value = new Date(`{{.CurrentMonth}} ${startDate} {{.Year}} 00:00:00`).toISOString().slice(0, 19);
+            document.getElementById("end-date").value = new Date(`{{.CurrentMonth}} ${endDate} {{.Year}} 00:00:00`).toISOString().slice(0, 19);
         }
 
         function saveEvent() {
             const form = document.getElementById("event-form");
             const data = new FormData(form);
 
-            console.log(data.getAll)
         }
         const chatConnection = new WebSocket("ws://" + document.location.host + "/wschat");
         chatConnection.onmessage = function (event) {

@@ -15,7 +15,7 @@ const (
 	user       = "root"
 	password   = "secret"
 	dbname     = "gotripdb"
-	TimeFormat = "2006-01-02"
+	TimeFormat = "2006-01-02T15:04"
 )
 
 type Room struct {
@@ -28,14 +28,14 @@ type Room struct {
 }
 
 type Event struct {
-	Id          int
-	RoomId      int
-	Name        string
-	StartDate   time.Time
-	EndDate     time.Time
-	Description string
-	CreatedDate time.Time
-	UpdatedDate time.Time
+	Id          int       `json:"-"`
+	RoomId      int       `json:"-"`
+	Name        string    `json:"event_name"`
+	StartDate   time.Time `json:"start_date"`
+	EndDate     time.Time `json:"end_date"`
+	Description string    `json:"event_description"`
+	CreatedDate time.Time `json:"-"`
+	UpdatedDate time.Time `json:"-"`
 }
 
 type Database struct {
@@ -81,8 +81,30 @@ func (db *Database) CloseConnect() {
 	db.driver.Close()
 }
 
-func (db *Database) GetCalendar(calendarId int) {
-	fmt.Printf("Getting calendar %d from database\n", calendarId)
+func (db *Database) GetCalendar(roomId int) ([]Event, error) {
+	fmt.Printf("Getting calendar %d from database\n", roomId)
+	query := `SELECT * FROM events WHERE room_id = $1`
+
+	rows, err := db.driver.Query(query, roomId)
+	if err != nil {
+		fmt.Println(err)
+		return make([]Event, 0), err
+	}
+
+	var events []Event
+	for rows.Next() {
+		var event Event
+		if err := rows.Scan(&event.Id, &event.Name, &event.Description, &event.RoomId, &event.CreatedDate,
+			&event.UpdatedDate, &event.StartDate, &event.EndDate); err != nil {
+			return events, err
+		}
+		events = append(events, event)
+	}
+
+	if err = rows.Err(); err != nil {
+		return events, err
+	}
+	return events, nil
 }
 
 func (db *Database) SaveEvent(event Event) (int, error) {
@@ -90,7 +112,7 @@ func (db *Database) SaveEvent(event Event) (int, error) {
 				VALUES ($1, $2, $3, $4, $5) RETURNING event_id`
 
 	var eventId int
-	err := db.driver.QueryRow(query, event.Id, event.Name, event.Description, event.StartDate, event.EndDate).Scan(&eventId)
+	err := db.driver.QueryRow(query, event.RoomId, event.Name, event.Description, event.StartDate, event.EndDate).Scan(&eventId)
 	if err != nil {
 		return 0, err
 	}
@@ -98,14 +120,13 @@ func (db *Database) SaveEvent(event Event) (int, error) {
 	return eventId, nil
 }
 
-func (db *Database) CreateRoom(name, key string, cap int16) int {
+func (db *Database) CreateRoom(name, key string, cap int16) (int, error) {
 	fmt.Printf("Creating %s with a capacity of %d \n", name, cap)
 
 	// Check if room already exists
 	existingRoom, err := db.GetRoom(name, key)
 	if existingRoom.Id != 0 && err == nil {
-		fmt.Printf("There is an existing room (%d - %s) with this name and key \n", existingRoom.Id, name)
-		return existingRoom.Id
+		return existingRoom.Id, nil
 	}
 
 	query := `INSERT INTO rooms (room_name, room_key, capacity)
@@ -115,10 +136,10 @@ func (db *Database) CreateRoom(name, key string, cap int16) int {
 
 	err = db.driver.QueryRow(query, name, key, cap).Scan(&primaryKey)
 	if err != nil {
-		log.Fatalf("Error while creating a new room %v\n", err)
+		return 0, nil
 	}
 
-	return primaryKey
+	return primaryKey, nil
 }
 
 func (db *Database) GetRoom(name, key string) (Room, error) {

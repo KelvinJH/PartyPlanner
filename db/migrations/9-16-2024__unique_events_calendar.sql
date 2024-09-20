@@ -5,6 +5,5 @@ BEGIN;
 
     ALTER TABLE events ADD COLUMN start_date timestamp not null;
     ALTER TABLE events ADD COLUMN end_date timestamp not null;
-    ALTER TABLE events ADD CONSTRAINT unique_event_constraint UNIQUE (start_date, end_date); 
 
 COMMIT;
