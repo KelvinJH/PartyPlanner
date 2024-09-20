@@ -1,9 +1,10 @@
 package ws
 
 import (
-	"github.com/gorilla/websocket"
-	"log"
+	"fmt"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -60,11 +61,11 @@ func (client *ChatClient) readMessages() {
 		_, content, err := client.connection.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Println("Error while reading mesasge: ", err)
+				fmt.Println("Error while reading mesasge: ", err)
 			}
 			break
 		}
-		log.Println("Inside the read message function of golang")
+		fmt.Println("Inside the read message function of golang")
 
 		message := Message{
 			content:   string(content),
@@ -85,12 +86,12 @@ func (client *ChatClient) writeMessages() {
 		case message, ok := <-client.egress:
 			if !ok {
 				if err := client.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Println("Connection closed: ", err)
+					fmt.Println("Connection closed: ", err)
 				}
 				return
 			}
 			if err := client.connection.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Println("failed to send message: ", err)
+				fmt.Println("failed to send message: ", err)
 			}
 
 		}
@@ -108,12 +109,12 @@ func (client *EventClient) writeMessages() {
 		case message, ok := <-client.eventQueue:
 			if !ok {
 				if err := client.connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Println("Connection closed: ", err)
+					fmt.Println("Connection closed: ", err)
 				}
 				return
 			}
 			if err := client.connection.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Println("failed to send event message: ", err)
+				fmt.Println("failed to send event message: ", err)
 			}
 		}
 	}

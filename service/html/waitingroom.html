@@ -50,8 +50,11 @@
 
                 document.getElementById("create-title").style.display = "block";
                 document.getElementById("create-button").style.display = "block";
+                document.getElementById("create-button").disabled = false;
+                
 
                 document.getElementById("join-button").style.display = "none";
+                document.getElementById("join-button").disabled = true;
                 document.getElementById("join-title").style.display = "none"
             } else {
                 document.getElementById("capacity-label").style.display = "none";
@@ -59,8 +62,10 @@
 
                 document.getElementById("create-title").style.display = "none";
                 document.getElementById("create-button").style.display = "none";
+                document.getElementById("create-button").disabled = true;
 
                 document.getElementById("join-button").style.display = "block";
+                document.getElementById("join-button").disabled = false;
                 document.getElementById("join-title").style.display = "block"
             }
         }

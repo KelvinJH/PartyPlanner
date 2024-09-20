@@ -5,21 +5,24 @@ import (
 	"partyplanner/db"
 )
 
-func ValidateRoom(name, key string) (bool, error) {
+func ValidateRoom(name, key string) (int, string, error) {
 	dbInstance := db.GetDbInstance()
 
-	room, err:= dbInstance.GetRoom(name, string(getHashedKey(key)))
+	room, err := dbInstance.GetRoom(name, string(getHashedKey(key)))
 	if room.Id == 0 {
-		return false, err
+		return 0, "", err
 	}
-	return true, nil
+	return room.Id, room.Name, nil
 }
 
 func CreateRoom(name, key string, capacity int16) int {
 	dbInstance := db.GetDbInstance()
 
 	hashedKey := getHashedKey(key)
-	createdRoom := dbInstance.CreateRoom(name, string(hashedKey), capacity)
+	createdRoom, err := dbInstance.CreateRoom(name, string(hashedKey), capacity)
+	if err != nil {
+		return 0
+	}
 	return createdRoom
 }
 

@@ -3,7 +3,6 @@ package router
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/sessions"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"partyplanner/bus"
 	"partyplanner/service"
 	"strconv"
+
+	"github.com/gorilla/sessions"
 )
 
 type Router struct {
@@ -18,7 +19,7 @@ type Router struct {
 	eventBus *bus.EventBus
 }
 
-type Event struct {
+type EventDto struct {
 	Name        string `json:"event_name"`
 	StartDate   string `json:"start_date"`
 	EndDate     string `json:"end_date"`
@@ -59,23 +60,27 @@ func SaveEvent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
 	}
-
-	event := []string{r.FormValue("event-name"), r.FormValue("start-date"), r.FormValue("end-date"), r.FormValue("event-description")}
+	event := EventDto{
+		Name:        r.FormValue("event-name"),
+		StartDate:   r.FormValue("start-date"),
+		EndDate:     r.FormValue("end-date"),
+		Description: r.FormValue("event-description"),
+	}
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
 		fmt.Println("Error converting event to bytes: ", err)
 		return
 	}
 	router.eventBus.Publish(eventBytes)
-
 	session, _ := router.store.Get(r, "session.id")
 	roomId, ok := session.Values["room-id"].(int)
 	if !ok {
 		http.Error(w, "Unable to find room id from session", http.StatusBadRequest)
+		return
 	}
 
 	// Save to db after testing
-	eventId, err := service.SaveEvent(roomId, event[0], event[1], event[2], event[3])
+	eventId, err := service.SaveEvent(roomId, event.Name, event.StartDate, event.EndDate, event.Description)
 	if err != nil {
 		http.Error(w, "Unable to save event", http.StatusInternalServerError)
 		return
@@ -126,15 +131,16 @@ func AuthorizeUser(w http.ResponseWriter, r *http.Request) {
 
 	roomName := r.FormValue("room-name")
 	roomKey := r.FormValue("room-key")
-	exists, err := service.ValidateRoom(roomName, roomKey)
+	foundId, foundName, err := service.ValidateRoom(roomName, roomKey)
 	if err != nil {
 		http.Error(w, "Unable to validate (room, key)", http.StatusBadRequest)
 	}
-	if exists {
+	if foundId != 0 && foundName != "" {
 		fmt.Println("the room exists")
 		session, _ := router.store.Get(r, "session.id")
 		session.Values["authenticated"] = true
-		session.Values["room-name"] = roomName
+		session.Values["room-name"] = foundName
+		session.Values["room-id"] = foundId
 		session.Save(r, w)
 	}
 
@@ -144,7 +150,7 @@ func AuthorizeUser(w http.ResponseWriter, r *http.Request) {
 
 func Healthcheck(w http.ResponseWriter, r *http.Request) {
 	authenticated := isAuthenticated(r)
-	if authenticated == true {
+	if authenticated {
 		w.Write([]byte("Session is authorized"))
 		return
 	} else {
@@ -168,10 +174,15 @@ func Calendar(w http.ResponseWriter, r *http.Request) {
 	calendarName, ok := session.Values["room-name"].(string)
 	if ok {
 		templateData.CalendarName = calendarName
-	} else {
-		templateData.CalendarName = "Unnamed"
 	}
 	template.Execute(w, templateData)
+
+	roomId, ok := session.Values["room-id"].(int)
+	if !ok {
+		return
+	}
+
+	go LoadCalendar(roomId)
 }
 
 func Home(w http.ResponseWriter, r *http.Request) {
@@ -182,11 +193,31 @@ func Home(w http.ResponseWriter, r *http.Request) {
 func Authorized(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, _ := router.store.Get(r, "session.id")
-		authenticated := session.Values["authenticated"]
-		if authenticated != nil && authenticated != false {
+		authenticated, ok := session.Values["authenticated"].(bool)
+		if ok && authenticated {
 			next.ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Unauthorized", http.StatusForbidden)
 		}
 	})
+}
+
+func LoadCalendar(roomId int) {
+	for {
+		select {
+		case <-router.eventBus.Ready:
+			goto LoadEvents
+		}
+	}
+LoadEvents:
+	fmt.Println("Inside load events")
+	savedEvents, err := service.LoadCalendar(roomId)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	for i := range savedEvents {
+		router.eventBus.Publish([]byte(savedEvents[i]))
+	}
 }
